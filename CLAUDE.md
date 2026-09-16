@@ -1,0 +1,68 @@
+# 主審之眼 — 接手說明
+
+## 跟使用者溝通
+
+用白話文，不要丟程式術語和檔名清單。講「負責畫 3D 的繪圖工具」而不是「three.js r128」，
+講「放進正式版」而不是「merge 到 main」。使用者要知道的是發生什麼事、影響是什麼，
+不是實作細節。
+
+## Artifact
+
+這個遊戲一直是從這個 repo 的 HTML 發布到同一個 Artifact：
+
+    https://claude.ai/artifact/AQhdAFmQqFZsTUfjHXYJj2
+
+**要更新一定要用 `url` 參數指向它**，否則會變成一個全新的 artifact、連結就換掉了。
+檔案已經從 `umpire-eye.html` 改名成 `index.html`，直接發布必然產生新的 artifact。
+
+發布時 `vendor/` 和 `*-model.js` 都要一起當作附帶檔案送上去，否則沙箱裡載不到。
+
+## 不要動的東西
+
+這三項都是使用者花時間量測、微調定案的，不是隨手寫的預設值。
+
+**1. `game.js` 的 `BROADCAST_DEFAULT`（主審視角）**
+照使用者提供的 CPBL 主審面罩攝影機照片推算出來：量了壘線斜率和本壘板的透視壓縮，
+再由使用者自己微調定案。**看起來「太廣角」是對的，不要修。**
+
+**2. `rig_common.py` 的骨頭長度**
+`THIGH`、`SHIN`、`UPPER_ARM`、`FOREARM`、`SHOULDER`、`STAND_HIP` 都不要改。
+投球動作的關鍵格是拿手腳的世界座標當目標點，改了骨長動作就會跑掉
+（手構不到目標會整支打直）。**要調外型只改 `_body_profile` 的半徑。**
+
+**3. 人物比例與配色**
+照 `reference/player_front.jpg` 做的：頭身比 7.2、頭寬 0.24 公尺、藍衣白褲白內搭、
+深藍襪加兩道白條。比例是從同一角色的 3D 重建量橫切面得到的。
+
+## 地雷
+
+**有貼圖的模型在 Artifact 沙箱裡會整個載入失敗。**
+GLTFLoader 用 `ImageBitmapLoader`，內部走 `fetch`，而沙箱的 CSP 不允許 fetch
+`blob:` 或 `data:`。兩道對策缺一不可：`blender/glb_datauri.py` 把貼圖改寫成 `data:` URI，
+加上 `scene.js` 開頭幫 `data:image/` 註冊 `TextureLoader`（走 `<img>`）。
+用 `python blender/devserver.py . --csp` 可以在本機重現沙箱的 CSP 來驗證。
+
+**`blender/build_pitcher_tripo.py` 目前沒用。**
+那是接外部模型的流程。那個模型的手臂比骨架短 25%，轉移後出手高度從 1.58 掉到
+1.43 公尺，動作會怪。要接外部模型請優先找本身就帶投球動畫的。
+
+**本機測試時瀏覽器會快取 `.js`。**
+`devserver.py` 已經送 `no-store`，但換過埠號比較保險。
+
+## 玩法已經定案，不要「補回來」
+
+- 不顯示好壞球數、出局數
+- 沒有 ABS 挑戰
+- 判決只有三種字樣：正確／誤判／超時
+- 打者每 5 球換一位（身高變，好球帶跟著變）
+- 得分顯示在判決文字右邊
+- 重播的距離標籤要離球 46px、上方 34px，不能擋到球
+- 場地尺寸全照規則書，界外線從打擊區前緣才開始畫（不穿過打擊區和本壘板）
+
+## 離線快取
+
+`sw.js` 會預先快取遊戲需要的全部檔案，所以 three.js 放在 `vendor/` 而不是走 CDN。
+
+> **改過任何遊戲檔案之後，一定要把 `sw.js` 裡的 `VERSION` 加一。**
+> 那些資源是 cache-first，不換 VERSION 的話裝過的人會一直拿到舊版。
+> `index.html` 本身是 network-first，只有它不受這個限制。
