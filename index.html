@@ -804,9 +804,10 @@
 
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<!-- three.js 放在 repo 裡而不是走 CDN：service worker 才能把它一起快取，離線才玩得動 -->
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
 <script src="pitcher-model.js"></script>
 <script src="pitcher-side-model.js"></script>
 <script src="pitcher-sub-model.js"></script>
@@ -816,5 +817,15 @@
 <script src="physics.js"></script>
 <script src="game.js"></script>
 <script src="tuner.js"></script>
+
+<script>
+  // 離線快取。需要 https（或 localhost），直接開 file:// 會註冊失敗，
+  // 但那只影響離線能力，遊戲本身照常跑，所以失敗就安靜略過。
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () {});
+    });
+  }
+</script>
 </body>
 </html>

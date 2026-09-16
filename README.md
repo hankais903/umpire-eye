@@ -42,8 +42,18 @@ https://hankais903.github.io/umpire-eye/
 `index.html` 的 `apple-mobile-web-app-*` 標籤負責這件事，版面本來就用 `env(safe-area-inset-*)`
 讓開瀏海與 Home 指示條，所以狀態列設成 `black-translucent`、畫面延伸到滿版也不會被蓋到。
 
-要注意 three.js、OrbitControls、GLTFLoader 目前都是從 CDN 載入的，所以**必須有網路才能玩**。
-要離線也能玩的話，得把這三支檔案收進 repo，再加一個 service worker 把它們跟模型一起快取起來。
+### 離線
+
+`sw.js` 會在第一次上線開啟時，把遊戲跑起來需要的 18 個檔案（約 3.7 MB）整包快取下來，
+之後**沒有網路也能玩**。three.js 也因此放在 `vendor/` 而不是走 CDN——CDN 的東西沒辦法
+保證快取得到。字型是跨網域的，第一次連線時順手存起來，沒存到就退回系統字型。
+
+service worker 需要 https 或 localhost，所以直接開 `file://` 不會有離線能力
+（遊戲本身照常跑，註冊失敗會安靜略過）。
+
+> **改過遊戲檔案之後，記得把 `sw.js` 裡的 `VERSION` 加一。**
+> 那些資源是 cache-first，不換 VERSION 的話裝過的人會一直拿到舊版。
+> `index.html` 本身是 network-first，所以只有它不受這個限制。
 
 ## 檔案
 
@@ -57,6 +67,8 @@ https://hankais903.github.io/umpire-eye/
 | `*-model.js` | Blender 產生的角色模型（glTF 以 base64 內嵌） |
 | `manifest.webmanifest` | 加到手機主畫面時的名稱、圖示、啟動方式 |
 | `icons/` | 桌面圖示，用 `tools/build_icon.py` 產生 |
+| `sw.js` | service worker，負責離線快取 |
+| `vendor/` | three.js r128、OrbitControls、GLTFLoader（取自 npm `three@0.128.0`） |
 
 ## 重建角色模型
 
