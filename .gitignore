@@ -1,0 +1,10 @@
+# 產物與暫存
+umpire-eye.zip
+temp_pic/
+blender/__pycache__/
+blender/prev_*.png
+blender/preview_*.png
+
+# 系統
+.DS_Store
+Thumbs.db
