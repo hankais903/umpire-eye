@@ -1,0 +1,76 @@
+# 主審之眼 THE SLOT
+
+3D 好壞球判決遊戲。用棒球主審的視角看投手投球，在球通過本壘板後判好球或壞球。
+
+好球帶做成本壘板往上延伸的**五角柱**，球體只要在飛行過程中碰到柱體的任何一部分就算好球——包含擦過後方尖角的情形。判決完會有環繞、正面、俯視、主審、打者、投手六種重播視角，正面與俯視是無透視的平視圖，看得出球到底有沒有碰到好球帶。
+
+## 玩法
+
+| | |
+|---|---|
+| 判決 | 球通過本壘板後按 `S` 好球、`B` 壞球，或點畫面按鈕。接球後 2 秒內要判，超時扣分。 |
+| 注意 | 捕手會偷好球，把手套往好球帶拉。看球，不要看手套。 |
+| 計分 | 正確 +100，邊界 2.5 公分內 +50，快速判決 +20，誤判 −50，超時 −50。一場 15 球。 |
+
+開場可以選投手類型（上肩／側投／下勾）、判決難度、球速。同一場不換投手。
+
+## 執行
+
+純靜態網頁，但因為模型是用 `fetch` 以外的方式內嵌的，直接開 `file://` 也可以，用伺服器比較保險：
+
+```bash
+python blender/devserver.py .
+```
+
+然後開 http://localhost:8131/umpire-eye.html
+
+加上 `--csp` 會送出跟 Claude Artifact 沙箱一樣的 Content-Security-Policy，用來驗證模型在沙箱裡載不載得進去：
+
+```bash
+python blender/devserver.py . --csp
+```
+
+## 檔案
+
+| 檔案 | 內容 |
+|---|---|
+| `umpire-eye.html` | 版面與全部 CSS（用 container query 做手機直向／橫向） |
+| `scene.js` | 球場、燈光、人物載入、好球帶、重播 |
+| `physics.js` | 球種、投法、難度、Statcast 式的等加速度球路模型 |
+| `game.js` | 遊戲流程、判決、相機、結算 |
+| `tuner.js` | 遊戲內的主審視角微調面板 |
+| `*-model.js` | Blender 產生的角色模型（glTF 以 base64 內嵌） |
+
+## 重建角色模型
+
+需要 Blender 4.5，全部都是背景執行，不用開 GUI。
+
+```bash
+blender --background --factory-startup --python blender/build_pitcher.py -- . blender/prev_over.png over
+blender --background --factory-startup --python blender/build_pitcher.py -- . - side
+blender --background --factory-startup --python blender/build_pitcher.py -- . - sub
+blender --background --factory-startup --python blender/build_batter.py  -- . blender/prev_batter.png
+blender --background --factory-startup --python blender/build_catcher.py -- . blender/prev_catcher.png
+```
+
+每個腳本會輸出 `<name>.glb` 和 `<name>-model.js`（後者是遊戲實際載入的，glTF 直接 base64 內嵌在 JS 裡）。
+
+| 腳本 | 用途 |
+|---|---|
+| `blender/rig_common.py` | 共用的骨架、身體剖面、蒙皮、動作烘焙、glTF 匯出 |
+| `blender/build_pitcher.py` | 投手（三種投法各一個動畫） |
+| `blender/build_batter.py` | 打者 |
+| `blender/build_catcher.py` | 捕手（接球手臂由遊戲即時 IK 控制） |
+| `blender/check_broadcast_view.py` | 用線稿比對主審視角與參考照片 |
+
+人物是**一整塊蒙皮網格**：頭、手掌、腳掌都接在同一條骨架線上，不是另外貼上去的剛體。比例與配色照 `reference/player_front.jpg`。
+
+### 換成外部模型
+
+`blender/tripo_fix.py` 和 `blender/build_pitcher_tripo.py` 是把外部模型接上這裡的投球動作的流程（處理綁定姿勢、對正方向尺寸、逐節瞄準轉移動作）。目前沒有啟用——外部模型的手臂比這裡的骨架短兩成五，轉移後出手點會偏低。
+
+`blender/glb_datauri.py` 把 GLB 裡的貼圖從 bufferView 改寫成 `data:` URI。有貼圖的模型一定要跑這一步，否則 GLTFLoader 會做成 `blob:` URL 再 fetch，在 Artifact 沙箱裡會被 CSP 擋掉、整個模型載入失敗。
+
+## 尺寸
+
+全部照規則書的實際尺寸：投手板到本壘板尖端 18.44 公尺、本壘板 17 吋寬、打擊區 4×6 呎（內緣距板邊 6 吋）、捕手區內寬 43 吋深 8 呎、壘間 90 呎、投手丘半徑 9 呎高 10 吋、內野土半徑 95 呎。好球帶寬度固定，上下緣依打者身高換算。

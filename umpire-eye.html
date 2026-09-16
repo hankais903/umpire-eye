@@ -1,0 +1,802 @@
+<title>主審之眼</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+  /* 單一主題：夜間球場。刻意不做淺色版，所有顏色都明確指定。 */
+  :root {
+    --night: #0B1524;
+    --panel: rgba(9, 17, 30, 0.86);
+    --panel-solid: #0F1C2E;
+    --line: rgba(237, 234, 224, 0.16);
+    --chalk: #EDEAE0;
+    --dim: #9AA7B6;
+    --amber: #F3B33D;
+    --sky: #86BDEB;
+    --good: #6CCB8C;
+    --bad: #EE6A4F;
+    --display: "Big Shoulders Display", "Noto Sans TC", system-ui, sans-serif;
+    --body: "Noto Sans TC", system-ui, -apple-system, "Microsoft JhengHei", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  }
+  html, body { height: 100%; }
+  /* hidden 一律隱藏：面板的 display 規則不能蓋過它 */
+  [hidden] { display: none !important; }
+  body {
+    background: var(--night);
+    color: var(--chalk);
+    font-family: var(--body);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* 整個遊戲放在 #app 裡：transform 讓裡面的 position: fixed 以遊戲框為準，
+     container 讓手機版面規則依遊戲框大小判斷，所以電腦上可以模擬手機直向、橫向 */
+  body { display: grid; place-items: center; }
+  #app {
+    position: relative; width: 100%; height: 100%; overflow: hidden;
+    background: var(--night); transform: translateZ(0); transform-origin: center center;
+    container: app / size;
+  }
+  body.sim-phone { background: #04070d; }
+  body.sim-phone #app { border-radius: 26px; box-shadow: 0 0 0 9px #1b2432, 0 0 0 10px #2c384a, 0 24px 70px rgba(0,0,0,0.7); }
+  .device-switch {
+    position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 50;
+    display: flex; gap: 2px; padding: 3px; border-radius: 8px;
+    background: rgba(4, 7, 13, 0.85); border: 1px solid var(--line); font-size: 12px;
+  }
+  .device-switch button { border: 0; background: transparent; color: var(--dim); padding: 5px 10px; border-radius: 6px; }
+  .device-switch button[aria-pressed="true"] { background: var(--amber); color: var(--night); font-weight: 700; }
+  body:not(.sim-phone) .device-switch { top: auto; bottom: 10px; left: auto; right: 16px; transform: none; }
+  @media (pointer: coarse) { .device-switch { display: none; } }
+  #field { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+  button, select, label { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .rotate-hint { display: none; margin: 0; font-size: 14px; color: var(--night); background: var(--amber); padding: 8px 12px; border-radius: 6px; }
+  kbd {
+    font-family: var(--mono); font-size: 11px; font-weight: 500;
+    padding: 1px 6px; border: 1px solid currentColor; border-radius: 4px; opacity: 0.7;
+  }
+  button { font-family: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+
+  /* 上方計分板 */
+  .hud-top {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    padding: 16px; pointer-events: none;
+  }
+  .hud-top > * { pointer-events: auto; }
+  .board {
+    display: grid; grid-template-columns: repeat(3, auto); column-gap: 18px; row-gap: 8px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px;
+  }
+  .board-cell { display: flex; align-items: center; gap: 8px; }
+  .lbl { font-family: var(--display); font-weight: 900; font-size: 20px; letter-spacing: 0.04em; color: var(--dim); width: 12px; }
+  .dots { display: flex; gap: 5px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid rgba(237,234,224,0.35); }
+  .dot.on.b { background: var(--good); border-color: var(--good); }
+  .dot.on.s { background: var(--amber); border-color: var(--amber); }
+  .dot.on.o { background: var(--bad); border-color: var(--bad); }
+  .board-meta {
+    grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px;
+    font-size: 12px; color: var(--dim); border-top: 1px solid var(--line); padding-top: 8px;
+  }
+  .board-meta b { color: var(--chalk); font-weight: 500; }
+  .scorebox {
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px 10px;
+  }
+  .score-lbl { font-size: 11px; letter-spacing: 0.12em; color: var(--dim); }
+  .score-num { font-family: var(--display); font-weight: 900; font-size: 40px; line-height: 0.9; color: var(--amber); font-variant-numeric: tabular-nums; }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); cursor: pointer; }
+  .toggle input { accent-color: var(--amber); }
+  .gear {
+    font-size: 12px; padding: 4px 10px; border-radius: 4px;
+    background: transparent; border: 1px solid var(--line); color: var(--dim);
+  }
+  .gear[aria-expanded="true"] { border-color: var(--amber); color: var(--amber); }
+  .gear.confirm { border-color: var(--bad); color: var(--bad); }
+  .hud-actions { display: flex; gap: 6px; }
+  .settings {
+    display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+    width: 230px; max-width: 100%; border-top: 1px solid var(--line); padding-top: 10px; font-size: 12px; color: var(--dim);
+  }
+  .settings select {
+    font-family: inherit; font-size: 13px; padding: 5px 6px; border-radius: 4px;
+    background: var(--panel-solid); color: var(--chalk); border: 1px solid var(--line);
+  }
+  .settings-note { margin: 0; line-height: 1.6; }
+  .settings-note b { font-family: var(--mono); color: var(--chalk); }
+  .tuner {
+    position: fixed; left: 16px; top: 50%; transform: translateY(-50%);
+    width: min(300px, calc(100% - 32px)); max-height: calc(100cqh - 32px); overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px;
+    display: flex; flex-direction: column; gap: 10px; font-size: 12px; color: var(--dim); z-index: 5;
+  }
+  .tuner-head { display: flex; justify-content: space-between; align-items: center; color: var(--chalk); font-size: 14px; }
+  .tuner-rows { display: flex; flex-direction: column; gap: 8px; }
+  .tuner-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
+  .tuner-row label { color: var(--chalk); }
+  .tuner-row output { font-family: var(--mono); color: var(--amber); font-variant-numeric: tabular-nums; }
+  .tuner-row input { grid-column: 1 / -1; width: 100%; accent-color: var(--amber); }
+  .tuner textarea {
+    width: 100%; box-sizing: border-box; resize: vertical; font-family: var(--mono); font-size: 11px;
+    background: var(--panel-solid); color: var(--chalk); border: 1px solid var(--line); border-radius: 4px; padding: 6px;
+  }
+  .fps-badge {
+    position: fixed; left: 16px; bottom: 16px; pointer-events: none;
+    font-family: var(--mono); font-size: 12px; color: var(--chalk);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px;
+  }
+
+  /* 判決按鈕 */
+  .controls {
+    position: fixed; left: 0; right: 0; bottom: 0; padding: 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none;
+  }
+  .controls > * { pointer-events: auto; }
+  .prompt { font-size: 14px; color: var(--chalk); text-shadow: 0 1px 8px rgba(0,0,0,0.8); min-height: 20px; text-align: center; }
+  .calls { display: flex; gap: 12px; width: min(460px, 100%); }
+  .call {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 14px 10px; border-radius: 6px; background: var(--panel); border: 1.5px solid var(--line);
+    font-size: 22px; transition: transform 0.08s, border-color 0.15s, opacity 0.15s;
+  }
+  .call b { font-weight: 900; letter-spacing: 0.1em; }
+  .call.ball { color: var(--sky); }
+  .call.strike { color: var(--amber); }
+  .call:not(:disabled).ball { border-color: var(--sky); }
+  .call:not(:disabled).strike { border-color: var(--amber); }
+  .call:not(:disabled):active { transform: scale(0.97); }
+  .call:disabled { opacity: 0.35; cursor: default; }
+  .pitch-btn {
+    padding: 12px 28px; border-radius: 6px; font-size: 16px; font-weight: 700; letter-spacing: 0.08em;
+    background: var(--chalk); color: var(--night); border: 0; display: flex; gap: 10px; align-items: center;
+  }
+
+  /* 主審喊判 */
+  .call-flash {
+    position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%);
+    font-weight: 900; font-size: clamp(56px, 12cqw, 120px); letter-spacing: 0.06em; font-style: italic;
+    pointer-events: none; opacity: 0; text-shadow: 0 4px 30px rgba(0,0,0,0.6); white-space: nowrap;
+  }
+  .call-flash.show { animation: flash 1s ease-out forwards; }
+  .call-flash.strike { color: var(--amber); }
+  .call-flash.ball { color: var(--sky); }
+  .call-flash.none { color: var(--dim); font-size: clamp(36px, 7cqw, 64px); }
+  @keyframes flash {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(1.25); }
+    15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    70% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -56%) scale(1); }
+  }
+
+  /* 判決結果面板 */
+  .result {
+    position: fixed; right: 16px; top: 50%; transform: translateY(-50%);
+    width: min(320px, calc(100% - 32px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .verdict { font-weight: 900; font-size: 28px; letter-spacing: 0.04em; line-height: 1.1; }
+  .verdict.good { color: var(--good); }
+  .verdict.bad { color: var(--bad); }
+  .truth { font-size: 14px; color: var(--dim); margin-top: -6px; }
+  .truth b { color: var(--chalk); font-weight: 700; }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin: 0; border-top: 1px solid var(--line); padding-top: 12px; }
+  .facts dt { font-size: 11px; color: var(--dim); letter-spacing: 0.06em; }
+  .facts dd { margin: 2px 0 0; font-family: var(--mono); font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .facts dd.wide { font-family: var(--body); }
+  .note { margin: 0; font-size: 13px; line-height: 1.6; padding: 10px 12px; border-radius: 6px; background: rgba(237,234,224,0.06); border-left: 3px solid var(--amber); }
+  .note.bad { border-left-color: var(--bad); }
+  .note.good { border-left-color: var(--good); }
+  .points { font-family: var(--display); font-weight: 900; font-size: 26px; font-variant-numeric: tabular-nums; }
+  .points.plus { color: var(--good); }
+  .points.minus { color: var(--bad); }
+  .views { display: flex; gap: 6px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .views button {
+    flex: 1; padding: 7px 0; font-size: 13px; border-radius: 5px;
+    background: transparent; border: 1px solid var(--line); color: var(--dim);
+  }
+  .views button.on { border-color: var(--amber); color: var(--amber); }
+  .hint { margin: 0; font-size: 12px; color: var(--dim); }
+  .next {
+    padding: 11px; border-radius: 6px; font-size: 15px; font-weight: 700; letter-spacing: 0.06em;
+    background: var(--chalk); color: var(--night); border: 0; display: flex; gap: 10px; justify-content: center; align-items: center;
+  }
+
+  .contact-tag {
+    position: fixed; left: 0; top: 0; pointer-events: none; white-space: nowrap;
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    padding: 3px 8px; border-radius: 4px; background: var(--panel-solid); border: 1px solid currentColor;
+    transform: translate(12px, -50%);
+  }
+
+  /* 開場與結算 */
+  .overlay {
+    position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
+    background: radial-gradient(ellipse at 50% 30%, rgba(11,21,36,0.55), rgba(11,21,36,0.94) 70%);
+    overflow-y: auto;
+  }
+  .sheet { width: min(560px, 100%); display: flex; flex-direction: column; gap: 18px; padding-block: 24px; }
+  .eyebrow { margin: 0; font-size: 13px; letter-spacing: 0.3em; color: var(--amber); }
+  h1 {
+    margin: 0; font-weight: 900; font-size: clamp(56px, 13cqw, 96px); line-height: 1; letter-spacing: 0.04em;
+    text-wrap: balance;
+  }
+  h1 .en { display: block; font-family: var(--display); font-size: 0.34em; letter-spacing: 0.22em; color: var(--dim); margin-top: 8px; }
+  .lede { margin: 0; font-size: 16px; line-height: 1.8; color: var(--chalk); max-width: 34em; }
+  .spec {
+    display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0;
+    font-size: 14px; line-height: 1.6; border-top: 1px solid var(--line); padding-top: 16px;
+  }
+  .spec dt { color: var(--dim); white-space: nowrap; }
+  .spec dd { margin: 0; }
+  /* 開場設定：每一組是一排可點選的選項 */
+  .setup { display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--line); padding-top: 16px; }
+  .setup fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .setup legend { font-size: 13px; letter-spacing: 0.08em; color: var(--dim); padding: 0; margin-bottom: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips input { position: absolute; opacity: 0; pointer-events: none; }
+  .chips label {
+    padding: 9px 16px; border-radius: 6px; border: 1px solid var(--line); background: rgba(237,234,224,0.04);
+    font-size: 15px; color: var(--chalk); cursor: pointer; user-select: none;
+  }
+  .chips input:checked + label { border-color: var(--amber); color: var(--amber); background: rgba(243,179,61,0.1); }
+  .chips input:focus-visible + label { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .setup-note { margin: 0; font-size: 13px; line-height: 1.6; color: var(--dim); min-height: 1.6em; }
+  .setup-note b { font-family: var(--mono); color: var(--chalk); }
+  .rules summary { cursor: pointer; font-size: 14px; color: var(--dim); }
+  .rules[open] summary { margin-bottom: 12px; }
+  .start {
+    align-self: flex-start; padding: 14px 34px; border-radius: 6px; border: 0;
+    background: var(--amber); color: var(--night); font-size: 18px; font-weight: 900; letter-spacing: 0.12em;
+  }
+  .grade { font-weight: 900; font-size: clamp(40px, 9cqw, 64px); line-height: 1.05; color: var(--amber); margin: 0; text-wrap: balance; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding-block: 14px; }
+  .stat .k { font-size: 12px; color: var(--dim); }
+  .stat .v { font-family: var(--display); font-weight: 900; font-size: 34px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .chart-wrap { display: flex; flex-direction: column; gap: 8px; }
+  .chart-title { font-size: 13px; color: var(--dim); }
+  #chart { width: 100%; max-width: 100%; aspect-ratio: 4 / 3; background: rgba(237,234,224,0.03); border-radius: 6px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--dim); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+  @container app (max-width: 720px) {
+    .result { top: auto; bottom: 16px; transform: none; max-height: 46cqh; overflow-y: auto; gap: 10px; padding: 14px; }
+    .verdict { font-size: 24px; }
+    .score-num { font-size: 30px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .call { font-size: 19px; padding: 12px 8px; }
+  }
+  .views { flex-wrap: wrap; }
+  .views button { min-width: 3.5em; }
+
+  /* ---------- 手機、平板（觸控） ---------- */
+  /* 觸控版面：真的手機，或在電腦上用「手機預覽」模擬 */
+    #app.touch kbd { display: none; }
+    #app.touch .hud-top {
+      padding-top: max(12px, env(safe-area-inset-top));
+      padding-left: max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
+    }
+    #app.touch /* 判決按鈕放在左右下角：大拇指好按，也不會蓋住畫面中央的本壘板 */
+    .calls {
+      position: fixed; left: 0; right: 0; bottom: 0; width: auto; justify-content: space-between;
+      padding: 0 max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      pointer-events: none;
+    }
+    #app.touch .call { flex: 0 0 min(30cqw, 170px); min-height: 68px; font-size: 22px; pointer-events: auto; }
+    #app.touch .pitch-btn {
+      position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom));
+      min-height: 56px; padding: 12px 26px; font-size: 18px;
+    }
+    #app.touch .prompt { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: 36cqw; }
+    #app.touch .views button { padding: 10px 0; }
+    #app.touch .next { min-height: 48px; }
+    #app.touch .gear { padding: 8px 12px; }
+    #app.touch .tuner-row input { height: 28px; }
+
+  @container app (orientation: portrait) {
+    #app.touch .rotate-hint { display: block; }
+  }
+
+  /* 手機橫放：高度很矮，計分板與結果面板要精簡 */
+  @container app (max-height: 500px) {
+    .board { padding: 6px 10px; row-gap: 4px; column-gap: 12px; }
+    .lbl { font-size: 15px; }
+    .dot { width: 9px; height: 9px; }
+    .board-meta { font-size: 11px; padding-top: 4px; }
+    #modeInfo { display: none; }
+    .scorebox { padding: 6px 10px; gap: 4px; max-height: calc(100cqh - 24px); overflow-y: auto; }
+    .score-lbl { display: none; }
+    .score-num { font-size: 26px; }
+    .result {
+      top: 12px; bottom: 12px; transform: none; width: min(300px, 42cqw);
+      right: max(16px, env(safe-area-inset-right)); max-height: none; overflow-y: auto; padding: 12px; gap: 8px;
+    }
+    .verdict { font-size: 20px; }
+    .truth { font-size: 12px; }
+    .facts { gap: 6px 10px; padding-top: 8px; }
+    .facts dd { font-size: 13px; }
+    .note { font-size: 12px; padding: 6px 8px; }
+    .points { font-size: 20px; }
+    .hint { display: none; }
+    .call-flash { font-size: 64px; }
+    .sheet { gap: 12px; padding-block: 8px; }
+    h1 { font-size: 48px; }
+    .lede { font-size: 14px; line-height: 1.6; }
+  }
+
+  /* ---------- 開場設定頁：一頁放得下，不需要捲動 ----------
+     大小都用遊戲框高度（cqh）縮放；寬畫面左右兩欄，手機直向上下排列 */
+  .overlay.intro { display: block; padding: 0; overflow: hidden; background: rgba(8, 14, 25, 0.94); }
+  .setup-sheet {
+    box-sizing: border-box; width: 100%; height: 100%; max-width: 1100px; margin: 0 auto;
+    padding: clamp(10px, 3.5cqh, 44px) clamp(16px, 4cqw, 56px);
+    display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: clamp(14px, 4cqw, 56px); align-content: center; align-items: center;
+  }
+  .setup-main { display: flex; flex-direction: column; gap: clamp(8px, 2.4cqh, 24px); min-width: 0; }
+  .setup-head { display: flex; flex-direction: column; gap: clamp(2px, 0.8cqh, 8px); }
+  .setup-head .eyebrow { font-size: clamp(10px, 1.7cqh, 13px); }
+  .setup-head h1 { font-size: clamp(28px, min(8.5cqh, 6.5cqw), 80px); line-height: 1; white-space: nowrap; }
+  .setup-head h1 .en { display: inline-block; margin: 0 0 0 0.55em; font-size: 0.3em; vertical-align: middle; }
+  .setup-head .lede { font-size: clamp(12px, 2cqh, 16px); line-height: 1.5; max-width: none; }
+  .setup-head .rotate-hint { font-size: 12px; padding: 4px 10px; align-self: flex-start; }
+
+  .setup { display: flex; flex-direction: column; gap: clamp(6px, 1.8cqh, 16px); border-top: 1px solid var(--line); padding-top: clamp(8px, 2cqh, 18px); }
+  .field { display: grid; grid-template-columns: 4.8em minmax(0, 1fr); gap: 3px 12px; align-items: center; }
+  .field-label { font-size: clamp(12px, 1.9cqh, 14px); color: var(--dim); letter-spacing: 0.04em; }
+  .field .setup-note { grid-column: 2; }
+  .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(4px, 1cqh, 8px); }
+  .chips label {
+    padding: clamp(5px, 1.4cqh, 11px) 4px; text-align: center; white-space: nowrap;
+    font-size: clamp(12px, 2.1cqh, 16px);
+  }
+  .setup-note {
+    font-size: clamp(11px, 1.7cqh, 13px); line-height: 1.4; min-height: 0;
+    overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .setup-main .start { align-self: stretch; padding: clamp(8px, 2.1cqh, 16px); font-size: clamp(15px, 2.7cqh, 21px); }
+
+  .rules-panel { border-left: 1px solid var(--line); padding-left: clamp(14px, 3.5cqw, 48px); min-width: 0; }
+  .rules-panel h2 { margin: 0 0 clamp(6px, 1.6cqh, 14px); font-size: clamp(12px, 1.9cqh, 14px); letter-spacing: 0.24em; color: var(--amber); font-weight: 700; }
+  .rules-list { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: clamp(4px, 1.5cqh, 14px) 14px; margin: 0; font-size: clamp(11px, 1.95cqh, 15px); line-height: 1.5; }
+  .rules-list dt { color: var(--dim); white-space: nowrap; }
+  .rules-list dd { margin: 0; }
+  .rules-list kbd { font-size: 0.8em; }
+
+  /* 手機直向：上下排列，大小改依寬度縮放 */
+  @container app (orientation: portrait) and (max-width: 720px) {
+    .setup-sheet { grid-template-columns: minmax(0, 1fr); align-content: center; gap: clamp(8px, 1.6cqh, 20px); padding: clamp(10px, 2cqh, 28px) 16px; }
+    .setup-main { gap: clamp(8px, 1.6cqh, 18px); }
+    .setup { gap: clamp(6px, 1.2cqh, 14px); padding-top: clamp(6px, 1.2cqh, 14px); }
+    .setup-head h1 { font-size: clamp(32px, 10cqw, 56px); }
+    .setup-head .lede { font-size: clamp(12px, 3.3cqw, 15px); }
+    .setup-main .start { padding: clamp(8px, 1.5cqh, 14px); }
+    .field { grid-template-columns: minmax(0, 1fr); }
+    .field .setup-note { grid-column: 1; }
+    .chips label { font-size: clamp(13px, 3.8cqw, 16px); padding: clamp(6px, 1.05cqh, 11px) 2px; }
+    .setup-note { font-size: clamp(11px, 3.1cqw, 13px); }
+    .rules-panel { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: clamp(8px, 1.6cqh, 16px); }
+    .rules-list { font-size: clamp(11px, 3.1cqw, 14px); line-height: 1.4; gap: clamp(2px, 0.6cqh, 8px) 10px; }
+    .rules-panel h2 { margin-bottom: 6px; }
+  }
+  /* 很矮的畫面（手機橫向）：省略介紹文字，說明只留一行 */
+  @container app (max-height: 500px) {
+    .setup-head .lede, .setup-head .rotate-hint { display: none; }
+    .setup-note { -webkit-line-clamp: 1; }
+    .setup-sheet { padding-block: 10px; }
+  }
+
+  /* ---------- 很窄的畫面（手機直向）：UI 整合成一條直欄，放在打者的另一側 ----------
+     畫面上方中央是投手，不能被擋住；#app 的 data-batter 標示打者在畫面左邊還是右邊 */
+  @container app (max-width: 520px) {
+    /* 從投手腳下（約畫面 26% 高度）開始往下排，完全避開投手；下方到本壘板之間只有草地與界外線 */
+    #app .hud-top, #app.touch .hud-top {
+      top: 26cqh; left: auto; right: 0; width: var(--hud-side-w, min(150px, 38cqw)); box-sizing: border-box;
+      flex-direction: column; align-items: stretch; gap: 6px;
+      padding: 0 max(10px, env(safe-area-inset-right)) 0 0;
+    }
+    #app[data-batter="right"] .hud-top, #app.touch[data-batter="right"] .hud-top {
+      right: auto; left: 0;
+      padding: 0 0 0 max(10px, env(safe-area-inset-left));
+    }
+    #app .board { grid-template-columns: 1fr; row-gap: 3px; padding: 6px 9px; }
+    #app .board-cell { gap: 6px; }
+    #app .lbl { font-size: 14px; }
+    #app .dot { width: 9px; height: 9px; }
+    #app .board-meta { flex-direction: column; gap: 2px; font-size: 10px; line-height: 1.35; padding-top: 5px; }
+    #app .scorebox { align-items: stretch; gap: 6px; padding: 6px 9px; max-height: none; }
+    #app .score-lbl { display: none; }
+    #app .score-num { font-size: 24px; text-align: right; }
+    #app .toggle { font-size: 11px; line-height: 1.35; }
+    #app .hud-actions { flex-wrap: wrap; gap: 4px; }
+    #app .hud-actions .gear { flex: 1 1 auto; padding: 6px 4px; white-space: nowrap; }
+    #app .settings { width: auto; }
+    /* 重播時結果面板已經佔了下半部，直欄先收起來，讓好球帶有空間 */
+    #app[data-phase="result"] .hud-top { display: none; }
+  }
+
+  /* ---------- 判決結果面板：一頁放完、不捲動；大小依遊戲框高度縮放 ---------- */
+  #app .result {
+    top: 50%; bottom: auto; left: auto; right: 16px; transform: translateY(-50%);
+    width: min(420px, 52cqw); max-height: calc(100cqh - 24px); box-sizing: border-box;
+    padding: clamp(10px, 1.9cqh, 18px); gap: clamp(6px, 1.25cqh, 12px); overflow: hidden;
+  }
+  #app .result-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  #app .verdict { font-size: clamp(18px, 3.2cqh, 28px); }
+  #app .points { font-size: clamp(16px, 2.8cqh, 26px); white-space: nowrap; }
+  #app .truth { margin: 0; font-size: clamp(11px, 1.6cqh, 14px); line-height: 1.45; }
+  #app .facts { gap: clamp(4px, 0.9cqh, 10px) 12px; padding-top: clamp(6px, 1.1cqh, 12px); }
+  #app .facts dt { font-size: clamp(10px, 1.35cqh, 11px); }
+  #app .facts dd { font-size: clamp(12px, 1.8cqh, 15px); }
+  #app .note { font-size: clamp(11px, 1.5cqh, 13px); line-height: 1.45; padding: clamp(4px, 0.9cqh, 10px) 10px; }
+  /* 視角按鈕：三欄等寬，兩排 */
+  #app .views {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(4px, 0.8cqh, 6px);
+    padding-top: clamp(6px, 1.1cqh, 12px);
+  }
+  #app .views button, #app.touch .views button {
+    min-width: 0; padding: clamp(5px, 1.05cqh, 9px) 0; font-size: clamp(12px, 1.6cqh, 14px);
+  }
+  #app .next, #app.touch .next { min-height: 0; padding: clamp(7px, 1.4cqh, 11px); font-size: clamp(14px, 1.9cqh, 15px); }
+  @container app (max-width: 720px) {
+    /* 手機直向：底部面板 */
+    #app .result {
+      top: auto; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; right: 10px; width: auto; transform: none;
+      max-height: 50cqh; padding: 12px; gap: 7px;
+    }
+    #app .verdict { font-size: 20px; }
+    #app .points { font-size: 18px; }
+    #app .truth, #app .note { font-size: 12px; }
+    #app .facts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 8px; padding-top: 7px; }
+    #app .facts dd { font-size: 12.5px; }
+    #app .facts dd.wide { font-size: 12px; }
+    #app .views button, #app.touch .views button { padding: 7px 0; font-size: 13px; }
+    #app .next, #app.touch .next { padding: 9px; }
+  }
+  @container app (max-width: 460px) {
+    #app .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @container app (max-height: 500px) {
+    /* 手機橫向：右側整條，高度用滿 */
+    #app .result {
+      top: 8px; bottom: 8px; left: auto; right: max(10px, env(safe-area-inset-right)); width: min(320px, 40cqw);
+      transform: none; max-height: none; padding: 10px 12px; gap: 5px;
+    }
+    #app .verdict { font-size: 17px; }
+    #app .points { font-size: 16px; }
+    #app .truth, #app .note { font-size: 11px; line-height: 1.35; }
+    #app .note { padding: 4px 8px; }
+    #app .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 10px; padding-top: 5px; }
+    #app .facts dt { font-size: 10px; }
+    #app .facts dd { font-size: 12px; }
+    #app .views { gap: 4px; padding-top: 5px; }
+    #app .views button, #app.touch .views button { padding: 5px 0; font-size: 12px; }
+    #app .next, #app.touch .next { padding: 6px; font-size: 13px; }
+  }
+
+  /* ---------- 遊戲中的計分與按鈕 ---------- */
+  .score-row { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; }
+  .toggle span { display: flex; flex-direction: column; line-height: 1.3; }
+  .toggle small { font-size: 0.85em; opacity: 0.75; }
+  .meta-item .sub { color: var(--dim); }
+  /* 手機直向的側邊直欄：每一項各佔一行，對齊一致 */
+  @container app (max-width: 520px) {
+    #app .board { display: flex; flex-direction: column; gap: 4px; padding: 7px 8px; }
+    #app .board-cell { display: grid; grid-template-columns: 14px 1fr; align-items: center; gap: 6px; }
+    #app .lbl { width: auto; font-size: 13px; }
+    #app .dots { gap: 4px; }
+    #app .board-meta { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; padding-top: 6px; font-size: 10.5px; line-height: 1.3; }
+    #app .meta-item { display: flex; flex-direction: column; gap: 1px; white-space: nowrap; }
+    #app .meta-item > * { white-space: nowrap; }
+    #app #pitchNo { display: block; } /* 「第 7 / 15 球」是一整句，不拆行 */
+    #app .meta-item b { font-weight: 700; }
+    #app .scorebox { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 7px 8px; }
+    #app .score-row { justify-content: space-between; white-space: nowrap; }
+    #app .score-lbl { display: inline; font-size: 10.5px; letter-spacing: 0; }
+    #app .score-num { font-size: 22px; }
+    #app .toggle { align-items: flex-start; font-size: 11px; gap: 5px; white-space: nowrap; }
+    #app .toggle small { display: none; }
+    #app .toggle input { margin: 2px 0 0; }
+    #app .hud-actions { display: grid; grid-template-columns: 1fr; gap: 4px; }
+    #app .hud-actions .gear { width: 100%; padding: 6px 0; text-align: center; }
+  }
+
+  /* 「顯示好球帶、重新開始、設定」一組；寬畫面時跟得分排在同一個框裡 */
+  .hud-controls { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+  /* ---------- 手機直向：資訊在最上方一整條、得分獨立小視窗、操作集中在右下角 ----------
+     放在最後面，覆蓋先前「側邊直欄」的排法 */
+  @container app (max-width: 520px) {
+    #app .hud-top, #app.touch .hud-top, #app[data-batter="right"] .hud-top, #app.touch[data-batter="right"] .hud-top {
+      top: 0; left: 0; right: 0; width: auto; flex-direction: row; align-items: stretch; gap: 8px;
+      padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
+    }
+    /* 球數與比賽資訊：第一排 B S O，下面兩排資訊 */
+    #app .board {
+      flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: repeat(3, auto); justify-content: start;
+      column-gap: 14px; row-gap: 4px; padding: 7px 10px;
+    }
+    #app .board-cell { display: flex; align-items: center; gap: 5px; }
+    #app .lbl { font-size: 14px; width: auto; }
+    #app .board-meta {
+      grid-column: 1 / -1; display: flex; flex-direction: row; flex-wrap: wrap; gap: 2px 10px;
+      margin-top: 0; padding-top: 5px; font-size: 11px; line-height: 1.4;
+    }
+    #app .meta-item { display: flex; flex-direction: row; flex-wrap: wrap; gap: 0 5px; }
+    /* 得分：獨立的小視窗 */
+    #app .scorebox { display: contents; }
+    #app .score-row {
+      flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      padding: 6px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    }
+    #app .score-lbl { display: block; font-size: 10.5px; letter-spacing: 0.1em; }
+    #app .score-num { font-size: 28px; }
+    /* 操作：在右下角投球按鈕的正上方，寬度與投球按鈕對齊 */
+    #app .hud-controls {
+      position: fixed; right: max(12px, env(safe-area-inset-right)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 82px);
+      width: 112px; box-sizing: border-box; align-items: stretch; gap: 6px; padding: 8px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 6px; pointer-events: auto;
+    }
+    #app .hud-controls .hud-actions { display: grid; grid-template-columns: 1fr; gap: 5px; }
+    #app .hud-controls .gear { width: 100%; padding: 7px 0; text-align: center; }
+    #app .toggle { white-space: nowrap; }
+    #app .toggle small { display: none; }
+    #app.touch .pitch-btn { right: max(12px, env(safe-area-inset-right)); width: 112px; justify-content: center; padding-inline: 0; }
+    /* 設定面板往上展開，不受右下角小框的寬度限制 */
+    #app .settings {
+      position: absolute; right: 0; bottom: calc(100% + 6px);
+      width: min(260px, calc(100cqw - 24px)); max-width: none; max-height: 55cqh;
+      overflow-y: auto; box-sizing: border-box; padding: 10px; background: var(--panel-solid);
+      border: 1px solid var(--line); border-radius: 6px;
+    }
+  }
+
+  /* 判決結果：判決文字與得分放大 */
+  /* 判決文字在左、得分在右（放不下時才換行） */
+  #app .result-head { flex-wrap: wrap; column-gap: 14px; row-gap: 0; }
+  #app .verdict { font-size: clamp(44px, 8.4cqh, 68px); }
+  #app .points { font-size: clamp(40px, 7.2cqh, 64px); line-height: 1.05; }
+  @container app (max-width: 720px) {
+    #app .verdict { font-size: 50px; }
+    #app .points { font-size: 46px; }
+  }
+  @container app (max-height: 500px) {
+    #app .verdict { font-size: 42px; }
+    #app .points { font-size: 40px; }
+  }
+
+  /* ---------- 結算畫面：一頁放完，不需捲動 ---------- */
+  .overlay.summary { display: block; padding: 0; overflow: hidden; background: rgba(8, 14, 25, 0.94); }
+  .summary-sheet {
+    box-sizing: border-box; width: 100%; height: 100%; max-width: 1100px; margin: 0 auto;
+    padding: clamp(10px, 3.5cqh, 44px) clamp(16px, 4cqw, 56px);
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: clamp(14px, 4cqw, 48px); align-content: center; align-items: center;
+  }
+  .summary-main { display: flex; flex-direction: column; gap: clamp(8px, 2.2cqh, 22px); min-width: 0; }
+  .summary-main .eyebrow { font-size: clamp(10px, 1.7cqh, 13px); }
+  .summary-main .grade { font-size: clamp(24px, 6.5cqh, 60px); line-height: 1.1; }
+  .summary-main .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(6px, 1.6cqh, 14px); padding-block: clamp(8px, 1.8cqh, 16px); }
+  .summary-main .stat .k { font-size: clamp(10px, 1.5cqh, 12px); }
+  .summary-main .stat .v { font-size: clamp(20px, 4cqh, 36px); }
+  .summary-main .start { align-self: stretch; padding: clamp(8px, 2cqh, 14px); font-size: clamp(14px, 2.5cqh, 18px); }
+  .summary .chart-wrap { min-width: 0; gap: clamp(4px, 1cqh, 8px); }
+  .summary .chart-title { font-size: clamp(10px, 1.6cqh, 13px); line-height: 1.4; }
+  .summary #chart { aspect-ratio: auto; height: clamp(120px, 46cqh, 360px); }
+  .summary .legend { font-size: clamp(10px, 1.5cqh, 12px); gap: 4px 12px; }
+  @container app (orientation: portrait) and (max-width: 720px) {
+    .summary-sheet { grid-template-columns: minmax(0, 1fr); gap: clamp(10px, 2cqh, 20px); padding: clamp(12px, 2.5cqh, 30px) 16px; }
+    .summary-main .grade { font-size: clamp(26px, 8cqw, 44px); }
+    .summary #chart { height: clamp(150px, 34cqh, 300px); }
+  }
+
+  /* 計分板只剩「第幾球」與投打資訊，上緣不再需要分隔線 */
+  #app .board-meta { border-top: 0; padding-top: 0; }
+
+  /* 判決結果面板放大後會蓋到上方計分板，重播時就把計分板收起來 */
+  #app[data-phase="result"] .hud-top { display: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .call-flash.show { animation-duration: 0.01s; opacity: 1; }
+  }
+</style>
+
+<div class="device-switch" id="deviceSwitch" role="group" aria-label="預覽裝置">
+  <button data-device="desktop" aria-pressed="true">電腦</button>
+  <button data-device="portrait" aria-pressed="false">手機直向</button>
+  <button data-device="landscape" aria-pressed="false">手機橫向</button>
+</div>
+
+<div id="app">
+<canvas id="field" aria-label="主審視角的 3D 球場"></canvas>
+
+<header class="hud-top">
+  <div class="board" aria-live="polite">
+    <div class="board-meta">
+      <span class="meta-item" id="pitchNo">第 <b>1</b> / 15 球</span>
+      <span class="meta-item" id="matchup">右投 vs 右打</span>
+      <span class="meta-item" id="modeInfo">普通 · 青少年</span>
+    </div>
+  </div>
+  <div class="scorebox">
+    <div class="score-row"><span class="score-lbl">得分</span><div class="score-num" id="score">0</div></div>
+    <div class="hud-controls">
+    <label class="toggle" for="showZone"><input type="checkbox" id="showZone"><span>顯示好球帶<small>練習，不計分</small></span></label>
+    <div class="hud-actions">
+      <button id="btnRestart" class="gear" title="快捷鍵 R">重新開始</button>
+      <button id="btnSettings" class="gear" aria-expanded="false" aria-controls="settings">設定</button>
+    </div>
+    <div class="settings" id="settings" hidden>
+      <label for="umpStance">主審站位</label>
+      <select id="umpStance">
+        <option value="center">正中間（轉播主審視角）</option>
+        <option value="slot">內側（捕手與打者之間）</option>
+      </select>
+      <button id="btnTuner" class="gear">視角調整…</button>
+      <label class="toggle" for="ghostCatcher"><input type="checkbox" id="ghostCatcher"> 捕手半透明</label>
+      <label for="fpsCap">更新率上限</label>
+      <select id="fpsCap">
+        <option value="0">跟隨螢幕（最高）</option>
+        <option value="120">120 FPS</option>
+        <option value="60">60 FPS</option>
+        <option value="30">30 FPS</option>
+      </select>
+      <label class="toggle" for="motionBlur"><input type="checkbox" id="motionBlur" checked> 動態模糊（消除殘影）</label>
+      <label class="toggle" for="showFps"><input type="checkbox" id="showFps"> 常駐顯示 FPS</label>
+      <p class="settings-note">目前 <b id="fpsNow">--</b> FPS。瀏覽器的更新率上限由螢幕決定，60Hz 螢幕最高就是 60。</p>
+    </div>
+    </div>
+  </div>
+</header>
+
+<div class="call-flash" id="callFlash"></div>
+<div class="fps-badge" id="fpsBadge" hidden></div>
+
+<div class="controls" id="controls">
+  <div class="prompt" id="prompt">按空白鍵，請投手投球</div>
+  <button id="btnPitch" class="pitch-btn">投球 <kbd>Space</kbd></button>
+  <div class="calls" id="calls" hidden>
+    <button id="btnBall" class="call ball" disabled><b>壞球</b><kbd>B</kbd></button>
+    <button id="btnStrike" class="call strike" disabled><b>好球</b><kbd>S</kbd></button>
+  </div>
+</div>
+
+<aside class="result" id="result" hidden>
+  <div class="result-head">
+    <div class="verdict" id="verdict"></div>
+    <div class="points" id="fPoints"></div>
+  </div>
+  <div class="truth" id="truth"></div>
+  <dl class="facts">
+    <div><dt>球種</dt><dd class="wide" id="fType"></dd></div>
+    <div><dt>出手球速</dt><dd id="fSpeed"></dd></div>
+    <div><dt>與好球帶距離</dt><dd id="fMargin"></dd></div>
+    <div><dt>判決時間</dt><dd id="fTime"></dd></div>
+  </dl>
+  <p class="note" id="absNote" hidden></p>
+  <p class="note" id="paNote" hidden></p>
+  <div class="views" role="group" aria-label="重播視角">
+    <button data-view="orbit" class="on">環繞</button>
+    <button data-view="front">正面</button>
+    <button data-view="top">俯視</button>
+    <button data-view="ump">主審</button>
+    <button data-view="batter">打者</button>
+    <button data-view="pitcher">投手</button>
+  </div>
+  <button id="btnNext" class="next">下一球 <kbd>Space</kbd></button>
+</aside>
+
+<div class="contact-tag" id="contactTag" hidden></div>
+
+<aside class="tuner" id="tuner" hidden aria-label="視角調整">
+  <div class="tuner-head"><b>視角調整</b><button id="tunerClose" class="gear">關閉</button></div>
+  <p class="settings-note">拖曳滑桿會即時改變主審視角（站位自動切到「正中間」）。數值會記在這個瀏覽器裡。</p>
+  <div class="tuner-rows" id="tunerRows"></div>
+  <div class="hud-actions"><button id="tunerReset" class="gear">重設為預設值</button><button id="tunerCopy" class="gear">複製數值</button></div>
+  <textarea id="tunerOut" readonly rows="5" aria-label="目前的視角數值"></textarea>
+  <p class="settings-note">調好後按「複製數值」，把文字貼給我，我會把它設成預設值。</p>
+</aside>
+
+<section class="overlay intro" id="intro">
+  <div class="setup-sheet">
+    <div class="setup-main">
+      <header class="setup-head">
+        <p class="eyebrow">3D 好壞球判決</p>
+        <h1>主審之眼<span class="en">THE SLOT</span></h1>
+        <p class="lede">球從 18.44 公尺外飛來，不到半秒。好球帶是本壘板往上延伸的五角柱，擦過後方尖角也算好球。</p>
+        <p class="rotate-hint">手機請橫放，視野比較完整。</p>
+      </header>
+
+      <div class="setup" id="setup">
+      <div class="field" role="radiogroup" aria-labelledby="lbl-pitcherStyle">
+        <span class="field-label" id="lbl-pitcherStyle">投手類型</span>
+        <div class="chips">
+          <input type="radio" name="pitcherStyle" id="pitcherStyle-random" value="random"><label for="pitcherStyle-random">隨機</label>
+          <input type="radio" name="pitcherStyle" id="pitcherStyle-over" value="over"><label for="pitcherStyle-over">上肩投</label>
+          <input type="radio" name="pitcherStyle" id="pitcherStyle-side" value="side"><label for="pitcherStyle-side">側投</label>
+          <input type="radio" name="pitcherStyle" id="pitcherStyle-sub" value="sub"><label for="pitcherStyle-sub">下勾投</label>
+        </div>
+        <p class="setup-note" id="pitcherStyleNote"></p>
+      </div>
+      <div class="field" role="radiogroup" aria-labelledby="lbl-difficulty">
+        <span class="field-label" id="lbl-difficulty">判決難度</span>
+        <div class="chips">
+          <input type="radio" name="difficulty" id="difficulty-easy" value="easy"><label for="difficulty-easy">入門</label>
+          <input type="radio" name="difficulty" id="difficulty-normal" value="normal"><label for="difficulty-normal">普通</label>
+          <input type="radio" name="difficulty" id="difficulty-hard" value="hard"><label for="difficulty-hard">困難</label>
+          <input type="radio" name="difficulty" id="difficulty-mlb" value="mlb"><label for="difficulty-mlb">大聯盟</label>
+        </div>
+        <p class="setup-note" id="difficultyNote"></p>
+      </div>
+      <div class="field" role="radiogroup" aria-labelledby="lbl-pitchSpeed">
+        <span class="field-label" id="lbl-pitchSpeed">球速</span>
+        <div class="chips">
+          <input type="radio" name="pitchSpeed" id="pitchSpeed-0_5" value="0.5"><label for="pitchSpeed-0_5">慢速</label>
+          <input type="radio" name="pitchSpeed" id="pitchSpeed-0_7" value="0.7"><label for="pitchSpeed-0_7">青少年</label>
+          <input type="radio" name="pitchSpeed" id="pitchSpeed-0_85" value="0.85"><label for="pitchSpeed-0_85">高中大學</label>
+          <input type="radio" name="pitchSpeed" id="pitchSpeed-1" value="1"><label for="pitchSpeed-1">職業</label>
+        </div>
+        <p class="setup-note" id="speedNote"></p>
+      </div>
+      </div>
+
+      <button id="btnStart" class="start">開始執法</button>
+    </div>
+
+    <section class="rules-panel" aria-labelledby="rulesTitle">
+      <h2 id="rulesTitle">玩法</h2>
+      <dl class="rules-list">
+        <dt>判決</dt><dd>球通過本壘板後按 <kbd>S</kbd> 好球、<kbd>B</kbd> 壞球，或點畫面按鈕。接球後 2 秒內要判。</dd>
+        <dt>注意</dt><dd>捕手會偷好球，把手套往好球帶拉。看球，不要看手套。</dd>
+        <dt>超時</dt><dd>接球後 2 秒內沒有判決算超時，扣 50 分。</dd>
+        <dt>重播</dt><dd>判完自動環繞好球帶；正面有九宮格編號，正面、俯視是無透視的平視圖。</dd>
+        <dt>計分</dt><dd>正確 +100，邊界 2.5 公分內 +50，快速判決 +20，誤判 −50。一場 15 球。</dd>
+        <dt>重來</dt><dd>右上角「重新開始」或 <kbd>R</kbd>，回到這一頁重選設定。</dd>
+      </dl>
+    </section>
+  </div>
+</section>
+
+<section class="overlay summary" id="summary" hidden>
+  <div class="summary-sheet">
+    <div class="summary-main">
+      <p class="eyebrow" id="summaryEyebrow">本場結算</p>
+      <p class="grade" id="grade"></p>
+      <div class="stats">
+        <div class="stat"><div class="k">判決正確率</div><div class="v" id="sAcc"></div></div>
+        <div class="stat"><div class="k">邊界球（2.5 公分內）</div><div class="v" id="sEdge"></div></div>
+        <div class="stat"><div class="k">超時未判</div><div class="v" id="sOver"></div></div>
+        <div class="stat"><div class="k">總得分</div><div class="v" id="sScore"></div></div>
+      </div>
+      <button id="btnAgain" class="start">選設定，再來一場</button>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">每一球的最接近點（主審視角，好球帶高度依打者身高正規化）</div>
+      <canvas id="chart"></canvas>
+      <div class="legend">
+        <span><i style="background: var(--good)"></i>判對</span>
+        <span><i style="background: var(--bad)"></i>判錯</span>
+        <span><i style="border: 1.5px solid var(--dim)"></i>空心代表實際為壞球</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="pitcher-model.js"></script>
+<script src="pitcher-side-model.js"></script>
+<script src="pitcher-sub-model.js"></script>
+<script src="batter-model.js"></script>
+<script src="catcher-model.js"></script>
+<script src="scene.js"></script>
+<script src="physics.js"></script>
+<script src="game.js"></script>
+<script src="tuner.js"></script>
