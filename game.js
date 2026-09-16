@@ -45,6 +45,15 @@ const WRONG_MIN = 25, WRONG_MAX = 130;      // 判錯：貼邊只扣 25，一眼
 
 // 0（一眼就看得出來）～ 1（幾乎貼著好球帶邊緣）
 const hardness = (margin) => Math.exp(-Math.abs(margin) / HARD_SCALE);
+
+/* 判決速度加分：從球通過本壘板算起（也就是畫面上那個「判決時間」），
+ * 判得越快加越多，中間是連續的，秒數差 0.1 秒就看得出分數差別。
+ * 只有判對才有，判錯不會因為判得快而少扣。 */
+const SPEED_FULL = 0.4;   // 這麼快以內都給滿分
+const SPEED_NONE = 1.6;   // 拖到這裡之後就沒有加分了
+const SPEED_MAX = 30;
+const speedBonus = (t) =>
+  Math.round(SPEED_MAX * Math.min(1, Math.max(0, (SPEED_NONE - t) / (SPEED_NONE - SPEED_FULL))));
 // 球與好球帶的距離：好球顯示進入多深，壞球顯示偏離多遠
 const marginText = (p) => (p.isStrike ? `進入 ${cm(p.margin)}cm` : `偏離 ${cm(p.margin)}cm`);
 // 重播畫面上的標籤：前面再標明這球實際是好球還是壞球
@@ -543,7 +552,7 @@ function finishPitch() {
     flash(call.isStrike ? '好球！' : '壞球！', call.isStrike ? 'strike' : 'ball');
     const h = hardness(p.margin);
     points = correct
-      ? Math.round(CORRECT_MIN + (CORRECT_MAX - CORRECT_MIN) * h) + (call.time < 0.6 ? 20 : 0)
+      ? Math.round(CORRECT_MIN + (CORRECT_MAX - CORRECT_MIN) * h) + speedBonus(call.time)
       : -Math.round(WRONG_MIN + (WRONG_MAX - WRONG_MIN) * (1 - h));
   }
   if (G.practice) points = 0;
