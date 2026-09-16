@@ -64,5 +64,13 @@ GLTFLoader 用 `ImageBitmapLoader`，內部走 `fetch`，而沙箱的 CSP 不允
 `sw.js` 會預先快取遊戲需要的全部檔案，所以 three.js 放在 `vendor/` 而不是走 CDN。
 
 > **改過任何遊戲檔案之後，一定要把 `sw.js` 裡的 `VERSION` 加一。**
-> 那些資源是 cache-first，不換 VERSION 的話裝過的人會一直拿到舊版。
-> `index.html` 本身是 network-first，只有它不受這個限制。
+> 快取整批換新是靠這個，忘了加使用者就不會拿到新版。
+
+網頁本身跟其他檔案走同一套 cache-first 規則。**不要把 `index.html` 改成 network-first**——
+曾經那樣做過，結果是新的說明文字配上舊的遊戲程式（說明寫 9 球、玩起來 15 球）。
+要嘛全舊要嘛全新，中間狀態不能存在。
+
+更新是這樣運作的：`index.html` 用 `updateViaCache: "none"` 註冊，並在每次開啟時主動
+呼叫一次 `update()`（瀏覽器自己的檢查會偷懶，從主畫面啟動的 App 尤其明顯）。新版接手時
+`controllerchange` 會觸發頁面自動重新載入一次，使用者只要打開一次就全部換新。
+第一次安裝沒有舊版可換，那時不重載。

@@ -1,10 +1,11 @@
 /* 離線快取。
  *
- * 改過任何一支遊戲檔案之後，一定要把 VERSION 加一，
- * 否則裝過的人會一直拿到舊版：下面的資源是 cache-first，
- * 只有換了 VERSION 讓快取整個重建才會抓到新檔。
+ * 改過任何一支遊戲檔案之後，要把 VERSION 加一，快取才會整批重建。
+ * 忘了加也不會出現「新說明配舊遊戲」那種半新半舊的狀況——
+ * 所有檔案（含網頁本身）都走同一套規則，要嘛全舊、要嘛全新。
+ * 新版準備好的時候會通知頁面，頁面自己重新載入一次就換過去了。
  */
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = 'umpire-eye-' + VERSION;
 
 // 遊戲跑起來需要的全部東西。少一個 addAll 就會整批失敗、
@@ -33,6 +34,7 @@ const SHELL = [
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', (e) => {
+  // 不等舊版收工：新版裝好就直接上，配合頁面那邊的重新載入
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 
@@ -44,14 +46,14 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-async function cacheFirst(req) {
-  const hit = await caches.match(req);
+async function cacheFirst(req, key) {
+  const hit = await caches.match(key || req);
   if (hit) return hit;
   const res = await fetch(req);
   // 字型是跨網域的 opaque 回應，status 會是 0，但一樣存得起來也用得了
   if (res && (res.ok || res.type === 'opaque')) {
     const c = await caches.open(CACHE);
-    c.put(req, res.clone());
+    c.put(key || req, res.clone());
   }
   return res;
 }
@@ -60,23 +62,13 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
 
-  const url = new URL(req.url);
-
-  // 頁面本身走 network-first：這樣改版推上去之後，
-  // 只要有網路，下一次打開就會看到新的，不用等 VERSION 換。
+  // 網頁本身跟其他檔案走同一套規則，否則會出現新網頁配舊程式
   if (req.mode === 'navigate') {
-    e.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('./', copy));
-          return res;
-        })
-        .catch(() => caches.match('./').then((hit) => hit || caches.match('index.html')))
-    );
+    e.respondWith(cacheFirst(req, './'));
     return;
   }
 
+  const url = new URL(req.url);
   if (url.origin === self.location.origin || FONT_HOSTS.includes(url.hostname)) {
     e.respondWith(cacheFirst(req));
   }

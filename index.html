@@ -822,8 +822,22 @@
   // 離線快取。需要 https（或 localhost），直接開 file:// 會註冊失敗，
   // 但那只影響離線能力，遊戲本身照常跑，所以失敗就安靜略過。
   if ("serviceWorker" in navigator) {
+    // 本來就有舊版在服務時，新版接手後要重新載入一次，
+    // 否則這一輪會是舊程式配新網頁。第一次安裝沒有舊版，不必重載。
+    var hadController = !!navigator.serviceWorker.controller;
+    var reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController || reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("sw.js").catch(function () {});
+      // updateViaCache: none + 每次開啟都主動 update()：
+      // 瀏覽器自己的更新檢查會偷懶（尤其是從主畫面啟動的 App），
+      // 不明講的話使用者可能好幾天都拿到舊版。
+      navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+        .then(function (reg) { reg.update(); })
+        .catch(function () {});
     });
   }
 </script>
