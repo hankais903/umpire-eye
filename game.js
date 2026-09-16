@@ -1,6 +1,6 @@
 /* 主審之眼：遊戲流程、判決、重播與結算 */
 
-const TOTAL_PITCHES = 10;
+const TOTAL_PITCHES = 9;
 // 投手從準備姿勢到出手的時間：有 Blender 模型時以動畫為準
 const windupTime = () => (pitcherRig.model ? pitcherRig.releaseT : 1.0);
 const DECIDE_LIMIT = 2.0;
@@ -40,7 +40,7 @@ const marginTag = (p) => `${p.isStrike ? '好球' : '壞球'} ${marginText(p)}`;
 
 /* ---------- 打席與計分板 ---------- */
 
-const BATTER_PITCHES = 5; // 每 5 球換一位打者
+const BATTER_PITCHES = 3; // 每 3 球換一位打者
 
 function newAtBat() {
   G.batterSide = Math.random() < 0.6 ? -1 : 1;
