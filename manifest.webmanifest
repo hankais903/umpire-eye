@@ -1,0 +1,17 @@
+{
+  "name": "主審之眼 THE SLOT",
+  "short_name": "主審之眼",
+  "description": "3D 好壞球判決遊戲。用棒球主審的視角看投手投球，在球通過本壘板後判好球或壞球。",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0B1524",
+  "theme_color": "#0B1524",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

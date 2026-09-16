@@ -22,7 +22,7 @@
 python blender/devserver.py .
 ```
 
-然後開 http://localhost:8131/umpire-eye.html
+然後開 http://localhost:8131/
 
 加上 `--csp` 會送出跟 Claude Artifact 沙箱一樣的 Content-Security-Policy，用來驗證模型在沙箱裡載不載得進去：
 
@@ -30,16 +30,33 @@ python blender/devserver.py .
 python blender/devserver.py . --csp
 ```
 
+## 發佈與加到手機主畫面
+
+用 GitHub Pages 發佈（Settings → Pages → Source 選 `main` / root），網址是：
+
+```
+https://hankais903.github.io/umpire-eye/
+```
+
+在 iPhone 用 Safari 打開，分享鈕 →「加入主畫面」，就會變成一個沒有網址列的全螢幕 App。
+`index.html` 的 `apple-mobile-web-app-*` 標籤負責這件事，版面本來就用 `env(safe-area-inset-*)`
+讓開瀏海與 Home 指示條，所以狀態列設成 `black-translucent`、畫面延伸到滿版也不會被蓋到。
+
+要注意 three.js、OrbitControls、GLTFLoader 目前都是從 CDN 載入的，所以**必須有網路才能玩**。
+要離線也能玩的話，得把這三支檔案收進 repo，再加一個 service worker 把它們跟模型一起快取起來。
+
 ## 檔案
 
 | 檔案 | 內容 |
 |---|---|
-| `umpire-eye.html` | 版面與全部 CSS（用 container query 做手機直向／橫向） |
+| `index.html` | 版面與全部 CSS（用 container query 做手機直向／橫向） |
 | `scene.js` | 球場、燈光、人物載入、好球帶、重播 |
 | `physics.js` | 球種、投法、難度、Statcast 式的等加速度球路模型 |
 | `game.js` | 遊戲流程、判決、相機、結算 |
 | `tuner.js` | 遊戲內的主審視角微調面板 |
 | `*-model.js` | Blender 產生的角色模型（glTF 以 base64 內嵌） |
+| `manifest.webmanifest` | 加到手機主畫面時的名稱、圖示、啟動方式 |
+| `icons/` | 桌面圖示，用 `tools/build_icon.py` 產生 |
 
 ## 重建角色模型
 
@@ -62,6 +79,7 @@ blender --background --factory-startup --python blender/build_catcher.py -- . bl
 | `blender/build_batter.py` | 打者 |
 | `blender/build_catcher.py` | 捕手（接球手臂由遊戲即時 IK 控制） |
 | `blender/check_broadcast_view.py` | 用線稿比對主審視角與參考照片 |
+| `tools/build_icon.py` | 產生桌面圖示（只用標準函式庫手寫 PNG，不需要 Pillow） |
 
 人物是**一整塊蒙皮網格**：頭、手掌、腳掌都接在同一條骨架線上，不是另外貼上去的剛體。比例與配色照 `reference/player_front.jpg`。
 
