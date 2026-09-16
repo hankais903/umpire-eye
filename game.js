@@ -33,6 +33,18 @@ const clock = () => performance.now() / 1000;
 const cm = (m) => (Math.abs(m) * 100).toFixed(1);
 const KMH = 3.6;
 const EDGE = 0.025; // 邊界球：與好球帶邊緣 2.5 公分內
+
+/* 計分：難度完全看球離好球帶邊緣多遠（margin 的絕對值，越接近 0 越擦邊）。
+ * 貼著邊的球最難判，判對給最多分、判錯罰最輕；
+ * 深入好球帶或差很遠的球一眼就看得出來，判對給得少、判錯罰得重。
+ * 好球與壞球一視同仁，看的只有「離邊緣多遠」。
+ * 用公尺原值算到小數點以下，最後才四捨五入成整數。 */
+const HARD_SCALE = 0.04;   // 離邊緣每多 4 公分，難度大約掉到三分之一
+const CORRECT_MIN = 40, CORRECT_MAX = 150;  // 判對：一眼可辨 40 分，完全貼邊 150 分
+const WRONG_MIN = 25, WRONG_MAX = 130;      // 判錯：貼邊只扣 25，一眼可辨扣到 130
+
+// 0（一眼就看得出來）～ 1（幾乎貼著好球帶邊緣）
+const hardness = (margin) => Math.exp(-Math.abs(margin) / HARD_SCALE);
 // 球與好球帶的距離：好球顯示進入多深，壞球顯示偏離多遠
 const marginText = (p) => (p.isStrike ? `進入 ${cm(p.margin)}cm` : `偏離 ${cm(p.margin)}cm`);
 // 重播畫面上的標籤：前面再標明這球實際是好球還是壞球
@@ -522,7 +534,6 @@ function makeCall(isStrike) {
 function finishPitch() {
   const p = G.pitch, call = G.call;
   const correct = call && call.isStrike === p.isStrike;
-  const absM = Math.abs(p.margin);
   let points = 0;
 
   if (!call) {
@@ -530,7 +541,10 @@ function finishPitch() {
     points = -50;
   } else {
     flash(call.isStrike ? '好球！' : '壞球！', call.isStrike ? 'strike' : 'ball');
-    points = correct ? 100 + (absM < EDGE ? 50 : 0) + (call.time < 0.6 ? 20 : 0) : -50;
+    const h = hardness(p.margin);
+    points = correct
+      ? Math.round(CORRECT_MIN + (CORRECT_MAX - CORRECT_MIN) * h) + (call.time < 0.6 ? 20 : 0)
+      : -Math.round(WRONG_MIN + (WRONG_MAX - WRONG_MIN) * (1 - h));
   }
   if (G.practice) points = 0;
 
