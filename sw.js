@@ -4,7 +4,7 @@
  * 否則裝過的人會一直拿到舊版：下面的資源是 cache-first，
  * 只有換了 VERSION 讓快取整個重建才會抓到新檔。
  */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'umpire-eye-' + VERSION;
 
 // 遊戲跑起來需要的全部東西。少一個 addAll 就會整批失敗、

@@ -1,6 +1,6 @@
 /* 主審之眼：遊戲流程、判決、重播與結算 */
 
-const TOTAL_PITCHES = 15;
+const TOTAL_PITCHES = 10;
 // 投手從準備姿勢到出手的時間：有 Blender 模型時以動畫為準
 const windupTime = () => (pitcherRig.model ? pitcherRig.releaseT : 1.0);
 const DECIDE_LIMIT = 2.0;
