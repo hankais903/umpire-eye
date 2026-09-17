@@ -5,7 +5,7 @@
  * 所有檔案（含網頁本身）都走同一套規則，要嘛全舊、要嘛全新。
  * 新版準備好的時候會通知頁面，頁面自己重新載入一次就換過去了。
  */
-const VERSION = 'v8';
+const VERSION = 'v9';
 const CACHE = 'umpire-eye-' + VERSION;
 
 // 遊戲跑起來需要的全部東西。少一個 addAll 就會整批失敗、

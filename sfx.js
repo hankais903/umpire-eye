@@ -28,6 +28,10 @@ const SFX = (function () {
   let ctx = null, master = null, sfxBus = null, crowdBus = null, crowd = null;
   let noise = null;
   const buffers = {};
+  // 每個音檔「實際有聲音」到第幾秒。排隊時等這個長度就好，
+  // 不必連尾巴的空白一起等（ball 全長 1 秒，但 0.77 秒之後就沒聲音了）。
+  const tails = {};
+  let queueUntil = 0;   // 排隊播放的聲音要接在什麼時候
   let enabled = true;
   let wantCrowd = false;
 
@@ -63,6 +67,15 @@ const SFX = (function () {
     load();
   }
 
+  // 從尾巴往回找第一個有聲音的取樣，得到實際的發聲長度
+  function audibleLength(buf) {
+    const d = buf.getChannelData(0);
+    for (let i = d.length - 1; i >= 0; i--) {
+      if (Math.abs(d[i]) > 0.005) return (i + 1) / buf.sampleRate;
+    }
+    return buf.duration;
+  }
+
   function load() {
     Object.keys(FILES).forEach((name) => {
       fetch(FILES[name])
@@ -70,6 +83,7 @@ const SFX = (function () {
         .then((buf) => new Promise((ok, no) => ctx.decodeAudioData(buf, ok, no)))
         .then((audio) => {
           buffers[name] = audio;
+          tails[name] = audibleLength(audio);
           // 背景人聲可能在檔案載完之前就該開始了，補播
           if (name === 'fans' && wantCrowd) startCrowd();
         })
@@ -118,19 +132,30 @@ const SFX = (function () {
 
   /* ---------- 播放 ---------- */
 
-  function play(name) {
+  /* mode 控制「按鍵音 → 判決音」這一串的排隊：
+       'start' 立刻響，並重新開始排隊（按下好壞球用這個）
+       'queue' 接在前一個排隊的聲音實際發完之後才響（判決音用這個）
+       不給   立刻響，跟排隊無關（進手套、超時等）
+     按鍵音一定要是 'start'：它是按鈕的回饋，被延後就像按鈕卡住。
+     前一球的判決音最長 4 秒，不重設的話下一球按得快就會被它卡到。 */
+  function play(name, mode) {
     if (!enabled || !ctx) return;
     if (ctx.state === 'suspended') ctx.resume();
     try {
+      const now = ctx.currentTime + 0.01;
+      const queue = mode === 'queue' || mode === 'start';
+      const at = mode === 'queue' ? Math.max(now, queueUntil) : now;
       const buf = buffers[name];
       if (buf) {
         const s = ctx.createBufferSource(), g = ctx.createGain();
         s.buffer = buf;
         g.gain.value = LEVEL[name] === undefined ? 1 : LEVEL[name];
         s.connect(g); g.connect(sfxBus);
-        s.start();
+        s.start(at);
+        if (queue) queueUntil = at + (tails[name] || buf.duration);
       } else if (SYNTH[name]) {
-        SYNTH[name](ctx.currentTime + 0.01);
+        SYNTH[name](at);
+        if (queue) queueUntil = at + 0.35; // 退回合成音時的估計長度
       }
     } catch (e) {}
   }

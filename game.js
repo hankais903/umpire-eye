@@ -537,7 +537,7 @@ function makeCall(isStrike) {
   const sincePlate = t - (G.flightStart + G.pitch.tPlate);
   if (sincePlate < 0) return; // 球還沒到本壘板
   G.call = { isStrike, time: sincePlate };
-  SFX.play(isStrike ? 'strike' : 'ball');
+  SFX.play(isStrike ? 'strike' : 'ball', 'start');
   finishPitch();
 }
 
@@ -555,7 +555,7 @@ function finishPitch() {
     points = -50;
   } else {
     flash(call.isStrike ? '好球！' : '壞球！', call.isStrike ? 'strike' : 'ball');
-    SFX.play(correct ? 'happy' : 'boo');
+    SFX.play(correct ? 'happy' : 'boo', 'queue');
     const h = hardness(p.margin);
     points = correct
       ? Math.round(CORRECT_MIN + (CORRECT_MAX - CORRECT_MIN) * h) + speedBonus(call.time)
