@@ -537,6 +537,7 @@ function makeCall(isStrike) {
   const sincePlate = t - (G.flightStart + G.pitch.tPlate);
   if (sincePlate < 0) return; // 球還沒到本壘板
   G.call = { isStrike, time: sincePlate };
+  SFX.play(isStrike ? 'strike' : 'ball');
   finishPitch();
 }
 
@@ -544,7 +545,7 @@ function finishPitch() {
   const p = G.pitch, call = G.call;
   // 球通過本壘板到進手套之間只有約 50 毫秒的空窗，判得夠快是有可能卡在這裡的。
   // 那時候 decide 階段還沒開始，手套聲不會響，音效就會時有時無像壞掉，所以補一聲。
-  if (G.phase === 'flight') SFX.play('mitt');
+  if (G.phase === 'flight') SFX.play('catch');
   const correct = call && call.isStrike === p.isStrike;
   let points = 0;
 
@@ -554,7 +555,7 @@ function finishPitch() {
     points = -50;
   } else {
     flash(call.isStrike ? '好球！' : '壞球！', call.isStrike ? 'strike' : 'ball');
-    SFX.play(correct ? 'good' : 'bad');
+    SFX.play(correct ? 'happy' : 'boo');
     const h = hardness(p.margin);
     points = correct
       ? Math.round(CORRECT_MIN + (CORRECT_MAX - CORRECT_MIN) * h) + speedBonus(call.time)
@@ -637,6 +638,7 @@ function toReady() {
 }
 
 function startGame() {
+  SFX.setCrowd(true);
   Object.assign(G, { n: 0, score: 0, history: [], view: 'orbit' });
   ui.intro.hidden = true;
   ui.summary.hidden = true;
@@ -707,7 +709,7 @@ function update() {
     if (t >= p.tEnd) {
       G.phase = 'decide';
       G.catchAt = now;
-      SFX.play('mitt');
+      SFX.play('catch');
       placeBall(posAt(p, p.tEnd, tmp), p.tEnd * 25, null);
       ui.prompt.textContent = '判決！';
     } else {
@@ -918,6 +920,7 @@ syncSetupForm();
 
 // 回到開場設定畫面（結算後、或按重新開始）
 function showSetup() {
+  SFX.setCrowd(false);
   G.phase = 'intro';
   appEl.dataset.phase = 'play';
   G.orbit = null;
@@ -954,6 +957,7 @@ btnSettings.addEventListener('click', () => {
 /* ---------- 結算 ---------- */
 
 function showSummary() {
+  SFX.setCrowd(false);
   SFX.play('end');
   $('summaryEyebrow').textContent = `本場結算 · ${pitcherLabel()} · ${DIFFICULTIES[settings.difficulty].label}難度 · ${SPEED_LABELS[settings.speed]}球速`;
   const H = G.history;
@@ -1062,7 +1066,7 @@ btnRestart.addEventListener('click', () => { requestRestart(); btnRestart.blur()
 ui.sound.checked = SFX.isEnabled();
 ui.sound.addEventListener('change', () => {
   SFX.setEnabled(ui.sound.checked);
-  if (ui.sound.checked) SFX.play('good'); // 打開的時候出個聲，讓人知道有效
+  if (ui.sound.checked) SFX.play('happy'); // 打開的時候出個聲，讓人知道有效
   ui.sound.blur();
 });
 

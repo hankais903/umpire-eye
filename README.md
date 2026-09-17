@@ -64,7 +64,8 @@ service worker 需要 https 或 localhost，所以直接開 `file://` 不會有�
 | `physics.js` | 球種、投法、難度、Statcast 式的等加速度球路模型 |
 | `game.js` | 遊戲流程、判決、相機、結算 |
 | `tuner.js` | 遊戲內的主審視角微調面板 |
-| `sfx.js` | 音效。用 Web Audio 當場合成，沒有任何音檔 |
+| `sfx.js` | 音效。播 `audio/` 裡的音檔，載不到就退回用 Web Audio 合成 |
+| `audio/` | 音效檔（MP3）。細節看 `audio/README.md` |
 | `*-model.js` | Blender 產生的角色模型（glTF 以 base64 內嵌） |
 | `manifest.webmanifest` | 加到手機主畫面時的名稱、圖示、啟動方式 |
 | `icons/` | 桌面圖示，用 `tools/build_icon.py` 產生 |
