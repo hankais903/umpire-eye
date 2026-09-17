@@ -1,6 +1,6 @@
 /* 主審之眼：遊戲流程、判決、重播與結算 */
 
-const TOTAL_PITCHES = 9;
+const TOTAL_PITCHES = 15;
 // 投手從準備姿勢到出手的時間：有 Blender 模型時以動畫為準
 const windupTime = () => (pitcherRig.model ? pitcherRig.releaseT : 1.0);
 const DECIDE_LIMIT = 2.0;
@@ -10,7 +10,7 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').match
 const $ = (id) => document.getElementById(id);
 const ui = {
   pitchNo: $('pitchNo'), matchup: $('matchup'), modeInfo: $('modeInfo'),
-  score: $('score'), showZone: $('showZone'),
+  score: $('score'), showZone: $('showZone'), sound: $('sound'),
   prompt: $('prompt'), btnPitch: $('btnPitch'), calls: $('calls'),
   btnBall: $('btnBall'), btnStrike: $('btnStrike'), flash: $('callFlash'),
   result: $('result'), verdict: $('verdict'), truth: $('truth'),
@@ -61,7 +61,7 @@ const marginTag = (p) => `${p.isStrike ? '好球' : '壞球'} ${marginText(p)}`;
 
 /* ---------- 打席與計分板 ---------- */
 
-const BATTER_PITCHES = 3; // 每 3 球換一位打者
+const BATTER_PITCHES = 5; // 每 5 球換一位打者
 
 function newAtBat() {
   G.batterSide = Math.random() < 0.6 ? -1 : 1;
@@ -542,14 +542,19 @@ function makeCall(isStrike) {
 
 function finishPitch() {
   const p = G.pitch, call = G.call;
+  // 球通過本壘板到進手套之間只有約 50 毫秒的空窗，判得夠快是有可能卡在這裡的。
+  // 那時候 decide 階段還沒開始，手套聲不會響，音效就會時有時無像壞掉，所以補一聲。
+  if (G.phase === 'flight') SFX.play('mitt');
   const correct = call && call.isStrike === p.isStrike;
   let points = 0;
 
   if (!call) {
     flash('超時', 'none');
+    SFX.play('late');
     points = -50;
   } else {
     flash(call.isStrike ? '好球！' : '壞球！', call.isStrike ? 'strike' : 'ball');
+    SFX.play(correct ? 'good' : 'bad');
     const h = hardness(p.margin);
     points = correct
       ? Math.round(CORRECT_MIN + (CORRECT_MAX - CORRECT_MIN) * h) + speedBonus(call.time)
@@ -692,6 +697,7 @@ function update() {
     if (t >= windupTime()) {
       G.phase = 'flight';
       G.flightStart = now;
+      SFX.play('release');
       ui.prompt.textContent = '';
     }
   } else if (G.phase === 'flight') {
@@ -701,6 +707,7 @@ function update() {
     if (t >= p.tEnd) {
       G.phase = 'decide';
       G.catchAt = now;
+      SFX.play('mitt');
       placeBall(posAt(p, p.tEnd, tmp), p.tEnd * 25, null);
       ui.prompt.textContent = '判決！';
     } else {
@@ -947,6 +954,7 @@ btnSettings.addEventListener('click', () => {
 /* ---------- 結算 ---------- */
 
 function showSummary() {
+  SFX.play('end');
   $('summaryEyebrow').textContent = `本場結算 · ${pitcherLabel()} · ${DIFFICULTIES[settings.difficulty].label}難度 · ${SPEED_LABELS[settings.speed]}球速`;
   const H = G.history;
   const correct = H.filter((h) => h.correct).length;
@@ -1051,6 +1059,13 @@ function requestRestart() {
   showSetup();
 }
 btnRestart.addEventListener('click', () => { requestRestart(); btnRestart.blur(); });
+ui.sound.checked = SFX.isEnabled();
+ui.sound.addEventListener('change', () => {
+  SFX.setEnabled(ui.sound.checked);
+  if (ui.sound.checked) SFX.play('good'); // 打開的時候出個聲，讓人知道有效
+  ui.sound.blur();
+});
+
 ui.showZone.addEventListener('change', () => {
   if (G.phase === 'ready') zoneGroup.visible = ui.showZone.checked;
   ui.showZone.blur();

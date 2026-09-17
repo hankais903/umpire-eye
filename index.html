@@ -633,7 +633,7 @@
 <header class="hud-top">
   <div class="board" aria-live="polite">
     <div class="board-meta">
-      <span class="meta-item" id="pitchNo">第 <b>1</b> / 9 球</span>
+      <span class="meta-item" id="pitchNo">第 <b>1</b> / 15 球</span>
       <span class="meta-item" id="matchup">右投 vs 右打</span>
       <span class="meta-item" id="modeInfo">普通 · 青少年</span>
     </div>
@@ -642,6 +642,7 @@
     <div class="score-row"><span class="score-lbl">得分</span><div class="score-num" id="score">0</div></div>
     <div class="hud-controls">
     <label class="toggle" for="showZone"><input type="checkbox" id="showZone"><span>顯示好球帶<small>練習，不計分</small></span></label>
+    <label class="toggle" for="sound"><input type="checkbox" id="sound" checked><span>音效</span></label>
     <div class="hud-actions">
       <button id="btnRestart" class="gear" title="快捷鍵 R">重新開始</button>
       <button id="btnSettings" class="gear" aria-expanded="false" aria-controls="settings">設定</button>
@@ -770,7 +771,7 @@
         <dt>注意</dt><dd>捕手會偷好球，把手套往好球帶拉。看球，不要看手套。</dd>
         <dt>超時</dt><dd>接球後 2 秒內沒有判決算超時，扣 50 分。</dd>
         <dt>重播</dt><dd>判完自動環繞好球帶；正面有九宮格編號，正面、俯視是無透視的平視圖。</dd>
-        <dt>計分</dt><dd>越難判的球分數越高。判對 +40～+150（貼著好球帶邊緣最高），判錯 −25～−130（越一眼可辨扣越多）。判得越快加越多（0.4 秒內 +30，1.6 秒後就沒有了），超時 −50。一場 9 球。</dd>
+        <dt>計分</dt><dd>越難判的球分數越高。判對 +40～+150（貼著好球帶邊緣最高），判錯 −25～−130（越一眼可辨扣越多）。判得越快加越多（0.4 秒內 +30，1.6 秒後就沒有了），超時 −50。一場 15 球。</dd>
         <dt>重來</dt><dd>右上角「重新開始」或 <kbd>R</kbd>，回到這一頁重選設定。</dd>
       </dl>
     </section>
@@ -813,6 +814,7 @@
 <script src="pitcher-sub-model.js"></script>
 <script src="batter-model.js"></script>
 <script src="catcher-model.js"></script>
+<script src="sfx.js"></script>
 <script src="scene.js"></script>
 <script src="physics.js"></script>
 <script src="game.js"></script>
